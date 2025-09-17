@@ -1,0 +1,70 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.orig
+
+# --- Virtual Environments ---
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+
+# --- OS & Editors ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Logs ---
+*.log
+logs/
+gunicorn*.log
+
+# --- Tests & Coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pytype/
+.pylint.d/
+.cache/
+
+# --- Build Artifacts ---
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Data & Downloads ---
+nltk_data/
+*.sqlite3
+*.db
+
+## --- Security / Secrets ---
+# .env
+# .env.*
+# !.env.example
+# *.pem
+# *.key
+# secrets*.json
+# credentials*.json
+
+# --- Flask instance folder ---
+instance/
+
+# --- Node (if a frontend is added later) ---
+node_modules/
+
+# --- Misc ---
+.python-version
