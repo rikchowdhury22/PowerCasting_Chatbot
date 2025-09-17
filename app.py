@@ -20,7 +20,8 @@ def handle_chat():
 
         logger.info(f"Received request: {user_input}")
         resp_obj = get_response(user_input)   # <-- now returns a dict
-        return jsonify({'response':resp_obj['data']['text']}), (200 if resp_obj.get("ok") else 400)
+        # return jsonify({'response':resp_obj['data']['text']}), (200 if resp_obj.get("ok") else 400)
+        return jsonify(resp_obj), (200 if resp_obj.get("ok") else 400)
 
     except Exception as e:
         logger.error(f"Error in handle_chat: {e}", exc_info=True)

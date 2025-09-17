@@ -163,11 +163,11 @@ def preprocess(text):
 
         # Procurement-related keywords
         procurement_keywords = [
-            "banking unit", "banking contribution", "banking", "banked unit",
-            "generated energy", "procurement price", "generation energy", "energy generated",
-            "energy generation", "demand banked", "energy", "produce", "banked",
-            "energy banked", "generated cost", "generation cost", "cost generated",
-            "cost generation", "last_price"
+            "banking unit","banking contribution","banking","banked unit",
+            "generated energy","procurement price","generation energy","energy generated",
+            "energy generation","demand banked","energy","produce","banked",
+            "energy banked","generated cost","generation cost","cost generated","cost generation",
+            "power purchase cost","ppc","purchase cost","last price"  # <-- add these
         ]
 
         # Combine all

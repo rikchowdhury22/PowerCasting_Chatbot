@@ -30,22 +30,43 @@ def handle_procurement_info(original_message, date_str, time_obj):
 
         message = normalize(original_message)
 
+        # Map user phrases -> API fields
         field_map = {
             # banking
-            "banking": "Banking_Unit", "banking unit": "Banking_Unit", "banked": "Banking_Unit",
-            "banked unit": "Banking_Unit", "banking contribution": "Banking_Unit",
-            "demand banked": "Banking_Unit", "energy banked": "Banking_Unit",
-            # energy
-            "energy": "generated_energy", "generated energy": "generated_energy",
-            "energy generated": "generated_energy", "energy generation": "generated_energy",
-            # cost
-            "generated cost": "Generated_Cost", "generation cost": "Generated_Cost",
-            "cost generated": "Generated_Cost", "cost generation": "Generated_Cost",
-            # price
-            "procurement price": "Last_Price", "iex cost": "Last_Price", "last_price": "Last_Price"
-            }
+            "banking": "Banking_Unit",
+            "banking unit": "Banking_Unit",
+            "banked": "Banking_Unit",
+            "banked unit": "Banking_Unit",
+            "banking contribution": "Banking_Unit",
+            "demand banked": "Banking_Unit",
+            "energy banked": "Banking_Unit",
 
-        requested_field = next((field_map[k] for k in field_map if k in message), None)
+            # energy
+            "generated energy": "generated_energy",
+            "energy generated": "generated_energy",
+            "energy generation": "generated_energy",
+            "energy": "generated_energy",
+
+            # total cost
+            "generated cost": "Generated_Cost",
+            "generation cost": "Generated_Cost",
+            "cost generated": "Generated_Cost",
+            "cost generation": "Generated_Cost",
+
+            # per-unit price
+            "procurement price": "Last_Price",
+            "iex cost": "Last_Price",
+            "power purchase cost": "Last_Price",
+            "ppc": "Last_Price",
+            "purchase cost": "Last_Price",
+        }
+
+        # Prefer the longest matching phrase
+        requested_field = next(
+            (field_map[k] for k in sorted(field_map, key=len, reverse=True) if k in message),
+            None
+        )
+
         if not requested_field:
             return err("MISSING_PARAM",
                        "Specify one of: procurement price, generated energy, banking unit, generated cost.",

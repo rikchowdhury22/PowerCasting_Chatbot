@@ -23,6 +23,19 @@ def get_response(user_input: str) -> dict:
     date_str = extract_date(user_input)
     time_obj = extract_time(user_input)
 
+    # ✅ Hard guard: if message clearly contains plant metrics, handle as plant_info
+    norm = normalize(user_input)
+    plant_markers = (
+        "plf","paf","variable cost","aux consumption","max power","min power",
+        "rated capacity","technical minimum","plant type","plant load factor","plant availability factor"
+    )
+    if any(m in norm for m in plant_markers):
+        if not time_obj:
+            time_obj = datetime.now().time().replace(second=0, microsecond=0)
+        if not date_str:
+            date_str = datetime.now().date().isoformat()
+        return handle_plant_info(date_str, time_obj, user_input)
+
     # 4) Plant info (does NOT require strict date/time)
     plant_kw = {
         'plf','paf','variable cost','aux consumption','max power','min power',
@@ -39,12 +52,11 @@ def get_response(user_input: str) -> dict:
 
     # 5) Procurement (requires BOTH date & time)
     procurement_kw = {
-    'banking','banking unit','banked','energy generated','banked unit',
-    'banking contribution','generated energy','procurement price','energy',
-    'demand banked','cost generated','generated cost','generation cost',
-    'last_price'
-}
-
+    "banking","banking unit","banked","energy generated","banked unit",
+    "banking contribution","generated energy","procurement price","energy",
+    "demand banked","cost generated","generated cost","generation cost",
+    "power purchase cost","ppc","purchase cost","last price"  # <-- add
+    }
     if any(k in matched_keywords for k in procurement_kw):
         if not (date_str and time_obj):
             return err("MISSING_DATE_OR_TIME",
@@ -62,6 +74,15 @@ def get_response(user_input: str) -> dict:
         if not date_str:
             date_str = datetime.now().date().isoformat()
         return handle_plant_info(date_str, time_obj, user_input)
+    
+    # Handle procurement by intent (not just keyword set)
+    if intent == "procurement":
+        if not (date_str and time_obj):
+            return err("MISSING_DATE_OR_TIME",
+                    "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
+                    intent="procurement")
+        return handle_procurement_info(user_input, date_str, time_obj)
+
 
     if intent in {"iex", "mod", "demand", "cost per block"}:
         if not (date_str and time_obj):
