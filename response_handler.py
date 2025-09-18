@@ -43,13 +43,16 @@ def _looks_empty_text(s: str) -> bool:
 def _safe_json(resp):
     """
     Returns (ok, payload, no_data):
-      - ok=False => fetch-fail
-      - ok=True & no_data=True => 'No data'
+      - ok=False => fetch-fail (timeouts, 5xx, bad JSON with non-empty body, etc.)
+      - ok=True & no_data=True => 'No data' (204/404/410 or empty body)
       - ok=True & no_data=False => payload is parsed JSON
     """
     try:
-        if resp.status_code == 204:
+        # Treat empty or not-found responses as 'no data'
+        if resp.status_code in (204, 404, 410):
             return True, None, True
+
+        # Any other non-2xx is a fetch failure
         if not (200 <= resp.status_code < 300):
             return False, None, False
 
@@ -57,8 +60,10 @@ def _safe_json(resp):
             payload = resp.json()
         except Exception:
             body = getattr(resp, "text", "") or ""
+            # Empty-ish body? Consider it 'no data'
             if _looks_empty_text(body):
                 return True, None, True
+            # Non-empty but not JSON → fetch fail
             logger.error(f"JSON parse failed (2xx). Body preview: {body[:200]!r}")
             return False, None, False
 
@@ -154,9 +159,9 @@ def generate_response(intent, date_str, time_obj, original_message=""):
             metric = "IEX market rate"
             try:
                 start_dt = ts.replace(second=0, microsecond=0)
-                end_dt = start_dt + timedelta(minutes=1)
-                resp = api_get("/iex/range", {"start": start_dt.strftime("%Y-%m-%d %H:%M"),
-                                              "end":   end_dt.strftime("%Y-%m-%d %H:%M")})
+                end_dt   = start_dt + timedelta(minutes=IEX_WINDOW_MINUTES or 1)
+                resp = api_get("/iex/range", {"start_date": start_dt.strftime("%Y-%m-%d %H:%M"),
+                                              "end_date":   end_dt.strftime("%Y-%m-%d %H:%M")})
                 ok_json, payload, no_data = _safe_json(resp)
                 if not ok_json: return _fetch_fail(metric)
                 if no_data:     return _not_found(metric, start_dt)
@@ -174,7 +179,7 @@ def generate_response(intent, date_str, time_obj, original_message=""):
 
                 if exact is None: return _not_found(metric, start_dt)
 
-                val = (exact.get("predicted") or exact.get("price") or exact.get("iex_price") or exact.get("value"))
+                val = (exact.get("predicted") or exact.get("price") or exact.get("iex_price") or exact.get("mcp") or exact.get("value"))
                 if val is None:   return _not_found(metric, start_dt)
 
                 try:

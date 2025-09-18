@@ -4,6 +4,7 @@ from logger import logger
 from nlp_setup import normalize
 from datetime import datetime
 from utils import fuzzy_match, ok, err
+from rapidfuzz import process, fuzz
 
 PLANT_API_URL = "https://api.powercasting.online/plant/"  # trailing slash prevents 307
 
@@ -80,9 +81,15 @@ def _format_value(value, unit_type: str) -> str:
     return str(value)
 
 def _pick_requested_field(message_norm: str):
-    for k, (api_key, label, unit_type) in FIELD_MAP.items():
+    # exact first
+    for k, trip in FIELD_MAP.items():
         if k in message_norm:
-            return api_key, label, unit_type
+            return trip
+    # fuzzy: best partial match
+    keys = list(FIELD_MAP.keys())
+    best = process.extractOne(message_norm, keys, scorer=fuzz.partial_ratio)
+    if best and best[1] >= 85:  # tolerance for 1-2 char errors
+        return FIELD_MAP[best[0]]
     return None, None, None
 
 def _extract_plant_name(message_norm: str):
@@ -149,10 +156,20 @@ def handle_plant_info(date_str, time_obj, original_message):
             })
 
         plant_query = _extract_plant_name(message_norm)
+        # overview/list-all if no plant
         if not plant_query:
-            return err("PLANT_NAME_MISSING",
-                       "Could not identify the plant name. Example: 'PLF of Koradi at 10:00 on 2025-09-12'.",
-                       intent="plant_info")
+            rows = []
+            for p in all_plants:
+                name = p.get("name") or "Unknown Plant"
+                raw  = p.get(api_key)
+                val  = _format_value(raw, unit_type) if raw not in (None,"","null","NaN") else "N/A"
+                rows.append({"plant": name, "value": val})
+            return ok("plant_info", {
+                "text": f"{field_label.capitalize()} values at {_fmt_time(ts)} on {_fmt_date(ts)}",
+                "metric": field_label,
+                "timestamp": f"{_fmt_date(ts)} {_fmt_time(ts)}",
+                "rows": rows
+            })
 
         plant_query_norm = normalize(plant_query.replace('/', ' '))
         best = None

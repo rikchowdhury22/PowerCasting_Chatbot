@@ -26,7 +26,15 @@ _PATTERNS = [
     re.compile(rf'\b{_MONTHS}\s+\d{{1,2}}\s+20\d{{2}}\b', re.I),
     # DD Month YYYY   (e.g., 30 September 2027)
     re.compile(rf'\b\d{{1,2}}\s+{_MONTHS}\s+20\d{{2}}\b', re.I),
-]
+    
+    re.compile(r'\b(20\d{2}-\d{1,2}-\d{1,2})\b'),
+    re.compile(r'\b(20\d{2}[/-]\d{1,2}[/-]\d{1,2})\b'),   # NEW: YYYY/MM/DD (or YYYY-MM-DD)
+    re.compile(r'\b(\d{1,2}[/-]\d{1,2}[/-]20\d{2})\b'),
+    re.compile(rf'\b{_MONTHS}\s+\d{{1,2}},\s*20\d{{2}}\b', re.I),
+    re.compile(rf'\b{_MONTHS}\s+\d{{1,2}}\s+20\d{{2}}\b', re.I),
+    re.compile(rf'\b\d{{1,2}}\s+{_MONTHS}\s+20\d{{2}}\b', re.I),
+
+    ]
 
 def _parse_to_iso(date_str: str) -> str | None:
     try:

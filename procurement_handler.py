@@ -5,6 +5,7 @@ from logger import logger
 from nlp_setup import normalize
 from urllib.parse import quote
 from utils import fuzzy_match, ok, err
+from rapidfuzz import process, fuzz
 
 def handle_procurement_info(original_message, date_str, time_obj):
     try:
@@ -55,22 +56,42 @@ def handle_procurement_info(original_message, date_str, time_obj):
 
             # per-unit price
             "procurement price": "Last_Price",
+            "last price": "Last_Price",
             "iex cost": "Last_Price",
             "power purchase cost": "Last_Price",
             "ppc": "Last_Price",
             "purchase cost": "Last_Price",
         }
 
-        # Prefer the longest matching phrase
-        requested_field = next(
-            (field_map[k] for k in sorted(field_map, key=len, reverse=True) if k in message),
-            None
-        )
+        # Pre-sort keys once (longest first) to avoid partial shadowing
+        _FIELD_KEYS = tuple(sorted(field_map.keys(), key=len, reverse=True))
+
+        def _pick_field(message_norm: str) -> str | None:
+            """
+            Return the API field name ('Last_Price', 'generated_energy', etc.)
+            from a normalized message. Tries exact (substring) first, then fuzzy.
+            """
+            # Exact (substring) match – longest keys first
+            for k in _FIELD_KEYS:
+                if k in message_norm:
+                    return field_map[k]
+
+            # Fuzzy partial match for small typos (e.g., 'purchse', 'bnking')
+            best = process.extractOne(message_norm, _FIELD_KEYS, scorer=fuzz.partial_ratio)
+            if best and best[1] >= 85:  # tolerance; tune 80–90 if needed
+                return field_map[best[0]]
+
+            return None
+
+        message_norm = normalize(original_message)  # keep or add this line near the top
+        requested_field = _pick_field(message_norm)
 
         if not requested_field:
-            return err("MISSING_PARAM",
-                       "Specify one of: procurement price, generated energy, banking unit, generated cost.",
-                       intent="procurement")
+            return err(
+                "MISSING_PARAM",
+                "Please specify what you need (e.g., 'procurement price' / 'ppc', 'generated energy', 'banking unit', or 'generated cost') along with date & time.",
+                intent="procurement",
+            )
 
         # Whole-payload field at top level?
         if requested_field in data:

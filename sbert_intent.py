@@ -12,27 +12,35 @@ THRESHOLD  = float(os.getenv("SBERT_INTENT_THRESHOLD", "0.65"))
 
 # Keep SBERT focused where we need help most
 ENABLED_INTENTS = set(
-    (os.getenv("SBERT_ENABLED_INTENTS") or "procurement,plant_info,iex,mod,demand,cost per block")
-    .replace(" ", "").split(",")
+    s.strip() for s in (os.getenv("SBERT_ENABLED_INTENTS") or
+                        "procurement,plant_info,iex,mod,demand,cost per block"
+    ).split(",") if s.strip()
 )
 
-# Canonical phrases per intent (seed from your Q&A coverage)
+# sbert_intent.py (add/replace these parts)
+
 _INTENT_PHRASES = {
     "procurement": [
-        "procurement price", "last price", "power purchase cost",
-        "generated energy", "energy generated", "energy generation",
-        "banking unit", "banked unit", "energy banked", "banking contribution",
-        "generated cost", "generation cost", "cost generated", "cost per plant"
+        "procurement price","last price","power purchase cost","ppc","purchase cost",
+        "generated energy","energy generation","energy generated",
+        "banking unit","banked unit","units banked","energy banked","banking contribution",
+        "generated cost","generation cost","cost generated","cost generation"
     ],
     "plant_info": [
-        "plf", "plant load factor", "paf", "plant availability factor",
-        "variable cost", "aux consumption", "auxiliary consumption",
-        "max power", "min power", "rated capacity", "technical minimum", "plant type"
+        "plf","plant load factor","paf","plant availability factor","availability factor",
+        "variable cost","aux consumption","auxiliary consumption",
+        "max power","min power","rated capacity","technical minimum","plant type"
     ],
-    "mod": ["mod price", "moment of dispatch price", "dispatch rate"],
-    "iex": ["iex price", "indian energy exchange price", "market clearing price", "exchange rate"],
-    "demand": ["demand forecast", "load prediction", "electricity consumption"],
-    "cost per block": ["cost per block", "block rate", "rate per block"]
+    "mod": [
+        "mod price","moment of dispatch price","dispatch price","dispatch rate","dispatch value",
+        "despatch price","despatch rate","despatch value"
+    ],
+    "iex": [
+        "iex price","indian energy exchange price","market clearing price","clearing price",
+        "exchange rate","exchange clearing rate","mcp"
+    ],
+    "demand": ["demand forecast","load prediction","electricity consumption","expected demand","predicted load"],
+    "cost per block": ["cost per block","block price","block rate","rate per block","block cost"]
 }
 
 # Load model once
@@ -53,21 +61,27 @@ def _embed(text_norm: str) -> np.ndarray:
     return np.asarray(vec, dtype=np.float32)
 
 def predict_intent_sbert(raw_text: str) -> tuple[str | None, float]:
-    """
-    Returns (intent, score) or (None, best_score_below_threshold).
-    """
     text_norm = normalize(raw_text)
     v = _embed(text_norm)
-    best_intent, best_score = None, -1.0
 
+    # context-aware threshold
+    base = THRESHOLD
+    # date/time or price-y tokens => a tad easier
+    if any(t in text_norm for t in (" at ", ":")) and any(w in text_norm for w in (
+        "price","rate","value","cost","ppc","mcp","dispatch","despatch","exchange","clearing"
+    )):
+        base = max(0.55, base - 0.05)
+    # plant-like tokens => a tad easier for plant_info
+    plant_cues = ("ntpc","gsecl","npci","npcil","hydro","wind","bagasse","solar","plant","vindhyachal","ukai","kadana")
+    if any(p in text_norm for p in plant_cues):
+        base = max(0.55, base - 0.03)
+
+    best_intent, best_score = None, -1.0
     for intent, ref_mat in _REF.items():
-        # cosine similarity since both are normalized: dot = cosine
-        # ref_mat: (K, D), v: (D,)
-        sims = ref_mat @ v
-        score = float(np.max(sims))
+        score = float(np.max(ref_mat @ v))
         if score > best_score:
             best_intent, best_score = intent, score
 
-    if best_score >= THRESHOLD:
+    if best_score >= base:
         return best_intent, best_score
     return None, best_score

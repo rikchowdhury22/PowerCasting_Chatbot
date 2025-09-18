@@ -1,9 +1,5 @@
-import nltk, os, contextlib
-from nltk.corpus import stopwords
 import string, re, requests, logging
-from logger import logger
 from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
 
 # ---------------------------
 # NLTK setup
@@ -97,41 +93,71 @@ stop_words = set(stopwords.words("english"))
 # ---------------------------
 # Normalization
 # ---------------------------
-def normalize(text):
-    text = text.lower()
-    text = re.sub(r'\b(\d+)\s*&\s*(\d+)\b', r'\1 and \2', text)
 
-    text = text.replace('&', 'and')
-    text = text.replace('&amp', 'and')
-    text = text.replace('/', ' ')
-    text = text.replace('\n', ' ')
-    text = text.replace('-', ' ')
-
-    # Replace known phrases with their normalized forms
-    replacements = {
+# 1) Canonical replacements (domain terms)
+REPLACEMENTS = {
+    # canonical domain terms
     "plant load factor": "plf",
     "plant availability factor": "paf",
     "auxiliary consumption": "aux consumption",
     "maximum power": "max power",
     "minimum power": "min power",
+
+    # keep IEX terms unified
     "iex price": "iex price",
     "iex cost": "iex price",
     "iex rate": "iex price",
+
+    # procurement & energy terms
     "banked unit": "banking unit",
     "gen energy": "generated energy",
     # do NOT rewrite "procurement price" to "last_price"
     "energy generated": "generated energy",
     "energy generation": "generated energy",
     "cost generated": "generated cost",
-    }
-    
-    for k, v in sorted(replacements.items(), key=lambda x: -len(x[0])):  # longest first
-        text = text.replace(k, v)
+}
 
-    text = re.sub(r'\s+', ' ', text).strip()
-    text = re.sub(r'[^\w\s]', '', text)
-    text = text.strip(string.punctuation)
-    return text
+# 2) Common typos / variants BEFORE intent/rules/SBERT
+TYPO_FIXES = {
+    "despatch": "dispatch",
+    "dispatch value": "dispatch price",
+    "exchng": "exchange",
+    "mcp": "market clearing price",
+    "purchse": "purchase",
+    "bnking": "banking",
+    "lod factor": "load factor",
+    "availability factor": "plant availability factor",
+}
+
+def _apply_replacements(text: str, repl: dict) -> str:
+    t = text
+    # longest keys first; case-insensitive; word boundaries
+    for src in sorted(repl.keys(), key=len, reverse=True):
+        pattern = re.compile(rf"\b{re.escape(src)}\b", flags=re.IGNORECASE)
+        t = pattern.sub(repl[src], t)
+    return re.sub(r"\s+", " ", t).strip()
+
+def normalize(text: str) -> str:
+    t = (text or "").strip()
+
+    # keep useful punctuation; normalize unicode
+    t = t.replace("–", "-").replace("—", "-").replace("’", "'")
+    t = t.replace("&amp;", "&").replace("&amp", "&")
+
+    # lowercase
+    t = t.lower()
+
+    # preserve "&" generally, but convert numeric "3 & 4" → "3 and 4" for plant names
+    t = re.sub(r"\b(\d+)\s*&\s*(\d+)\b", r"\1 and \2", t)
+
+    # apply canonical replacements, then typo fixes
+    t = _apply_replacements(t, REPLACEMENTS)
+    t = _apply_replacements(t, TYPO_FIXES)
+
+    # light cleanup: allow letters/digits, space, colon, slash, hyphen, ampersand, dot
+    t = re.sub(r"[^a-z0-9 :/\-&.]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
 
 # ---------------------------
 # NLP Helpers
