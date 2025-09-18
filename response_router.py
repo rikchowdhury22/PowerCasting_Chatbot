@@ -71,6 +71,10 @@ def get_response(user_input: str) -> dict:
     date_str = extract_date(user_input)
     time_obj = extract_time(user_input)
 
+    # NEW: respect "now/today/currently" phrases using your TZ
+    norm = normalize(user_input)
+    date_str, time_obj = _maybe_fill_now(norm, date_str, time_obj)
+
     # ✅ Hard guard: if message clearly contains plant metrics, handle as plant_info
     norm = normalize(user_input)
 
@@ -164,3 +168,6 @@ def get_response(user_input: str) -> dict:
     # Fallback
     if not intent:
         return err("UNRECOGNIZED", "Sorry, I couldn't understand your request.", intent=None)
+    
+    # NEW: if we had an intent but none of the branches handled it, say so explicitly
+    return err("UNSUPPORTED_INTENT", "Sorry, I don't have data for that request.", intent=intent)

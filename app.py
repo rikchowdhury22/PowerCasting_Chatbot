@@ -1,15 +1,11 @@
 # app.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import logging
-from logger import logger
 from response_router import get_response
+from logger import logger   # <-- use the shared logger (no get_logger, no basicConfig)
 
 app = Flask("Urja")
 CORS(app, resources={r"/*": {"origins": "*"}})
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 @app.route("/get", methods=["GET"])
 def handle_chat():
@@ -19,8 +15,7 @@ def handle_chat():
             return jsonify({"ok": False, "error": {"code": "EMPTY_REQUEST", "message": "Empty request"}}), 400
 
         logger.info(f"Received request: {user_input}")
-        resp_obj = get_response(user_input)   # <-- now returns a dict
-        # return jsonify({'response':resp_obj['data']['text']}), (200 if resp_obj.get("ok") else 400)
+        resp_obj = get_response(user_input)   # returns a dict
         return jsonify(resp_obj), (200 if resp_obj.get("ok") else 400)
 
     except Exception as e:
