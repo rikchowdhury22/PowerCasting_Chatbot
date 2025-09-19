@@ -10,6 +10,7 @@ from static_qa import match_static_qa
 from nlp_setup import preprocess, normalize
 from plant_handler import handle_plant_info
 from procurement_handler import handle_procurement_info
+from banking_handler import handle_banking_info           # <-- NEW
 from intent_handler import get_intent
 from response_handler import generate_response
 from logger import logger
@@ -37,11 +38,12 @@ def _snap_minutes_for_intent(intent: str | None) -> int | None:
         return _env_int("DEMAND_WINDOW_MINUTES", 15)
     if intent == "mod":
         return _env_int("MOD_WINDOW_MINUTES", 15)
+    if intent == "banking":                                   # <-- NEW
+        return _env_int("BANKING_WINDOW_MINUTES", 15)         # <-- NEW
     # plant_info / procurement: no snapping by default
     return None
 
 def _snap_time(time_obj, minutes: int):
-    """Floor time to previous multiple of `minutes`."""
     if not time_obj or minutes is None or minutes <= 1:
         return time_obj
     total = time_obj.hour * 60 + time_obj.minute
@@ -50,7 +52,7 @@ def _snap_time(time_obj, minutes: int):
 
 def _maybe_fill_now(norm_text: str, date_str: str | None, time_obj):
     if NOW_PAT.search(norm_text):
-        now = _now_tz().replace(second=0, microsecond=0)  # no 5-min math here
+        now = _now_tz().replace(second=0, microsecond=0)
         if not date_str:
             date_str = now.date().isoformat()
         if not time_obj:
@@ -71,14 +73,13 @@ def get_response(user_input: str) -> dict:
     date_str = extract_date(user_input)
     time_obj = extract_time(user_input)
 
-    # NEW: respect "now/today/currently" phrases using your TZ
+    # respect "now/today/currently"
     norm = normalize(user_input)
     date_str, time_obj = _maybe_fill_now(norm, date_str, time_obj)
 
-    # ✅ Hard guard: if message clearly contains plant metrics, handle as plant_info
+    # ✅ hard guard for plant metrics
     norm = normalize(user_input)
-
-    date_str, time_obj = _maybe_fill_now (norm, date_str, time_obj)
+    date_str, time_obj = _maybe_fill_now(norm, date_str, time_obj)
 
     plant_markers = (
         "plf","paf","variable cost","aux consumption","max power","min power",
@@ -91,38 +92,52 @@ def get_response(user_input: str) -> dict:
             date_str = datetime.now().date().isoformat()
         return handle_plant_info(date_str, time_obj, user_input)
 
-    # 4) Plant info (does NOT require strict date/time)
+    # 4) Plant info via keywords
     plant_kw = {
         'plf','paf','variable cost','aux consumption','max power','min power',
         'rated capacity','technical minimum','type','maximum power','minimum power',
         'auxiliary consumption','plant load factor','plant availability factor','aux usage','auxiliary usage','var cost'
     }
     if any(k in matched_keywords for k in plant_kw):
-        # Fill reasonable defaults for plant lookups only
         if not time_obj:
             time_obj = datetime.now().time().replace(second=0, microsecond=0)
         if not date_str:
             date_str = datetime.now().date().isoformat()
         return handle_plant_info(date_str, time_obj, user_input)
 
-    # 5) Procurement (requires BOTH date & time)
-    procurement_kw = {
-    "banking","banking unit","banked","energy generated","banked unit",
-    "banking contribution","generated energy","procurement price","energy",
-    "demand banked","cost generated","generated cost","generation cost",
-    "power purchase cost","ppc","purchase cost","last price"  # <-- add
+     # 5) BANKING (defaults to NOW if date/time missing)
+    banking_kw = {
+        "banking","banking unit","banked","banked unit","banking contribution","energy banked",
+        "adjusted units","adjustment charges","banking cost","banked units","banking units"
     }
-    if any(k in matched_keywords for k in procurement_kw):
+    if any(k in norm for k in banking_kw) or any(k in matched_keywords for k in banking_kw):
+        # default to "now" if not provided
+        if not time_obj:
+            time_obj = _now_tz().time().replace(second=0, microsecond=0)
+        if not date_str:
+            date_str = _now_tz().date().isoformat()
+
+        # snap to banking bucket (env-driven)
+        snap_min = _snap_minutes_for_intent("banking")
+        time_obj = _snap_time(time_obj, snap_min)
+        return handle_banking_info(date_str, time_obj, user_input)
+
+    # 6) Procurement (requires BOTH date & time) — banking terms removed
+    procurement_kw = {
+        "generated energy","procurement price","energy","generation energy",
+        "cost generated","generated cost","generation cost",
+        "power purchase cost","ppc","purchase cost","last price","iex cost"
+    }
+    if any(k in matched_keywords for k in procurement_kw) or any(k in norm for k in procurement_kw):
         if not (date_str and time_obj):
             return err("MISSING_DATE_OR_TIME",
                        "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
                        intent="procurement")
         return handle_procurement_info(user_input, date_str, time_obj)
 
-    # 6) IEX / MOD / Demand / Cost per block (requires BOTH)
+    # 7) IEX / MOD / Demand / Cost per block (requires BOTH)
     intent = get_intent(tokens, user_input)
 
-    # Plant intent (no strict dt): keep your existing auto-fill and return
     if intent == "plant_info":
         if not time_obj:
             time_obj = _now_tz().time().replace(second=0, microsecond=0)
@@ -130,44 +145,47 @@ def get_response(user_input: str) -> dict:
             date_str = _now_tz().date().isoformat()
         return handle_plant_info(date_str, time_obj, user_input)
 
-    # Procurement by intent (requires dt, but we DO NOT snap here by default)
     if intent == "procurement":
         if not (date_str and time_obj):
             return err("MISSING_DATE_OR_TIME",
-                    "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
-                    intent="procurement")
+                       "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
+                       intent="procurement")
         return handle_procurement_info(user_input, date_str, time_obj)
 
-    # IEX / MOD / Demand / Cost per block (requires dt)  ← SNAP HERE
+    if intent == "banking":
+        # default to "now" if not provided
+        if not time_obj:
+            time_obj = _now_tz().time().replace(second=0, microsecond=0)
+        if not date_str:
+            date_str = _now_tz().date().isoformat()
+
+        snap_min = _snap_minutes_for_intent("banking")
+        time_obj = _snap_time(time_obj, snap_min)
+        return handle_banking_info(date_str, time_obj, user_input)
+
     if intent in {"iex", "mod", "demand", "cost per block"}:
         if not (date_str and time_obj):
             return err("MISSING_DATE_OR_TIME",
-                    "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
-                    intent=intent)
-        # snap to intent-specific block size
+                       "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
+                       intent=intent)
         snap_min = _snap_minutes_for_intent(intent)
         time_obj = _snap_time(time_obj, snap_min)
         return generate_response(intent, date_str, time_obj)
 
-    # second-pass heuristic for procurement-style phrases
-   
+    # second-pass heuristic (procurement-style) — banking removed
     _proc_phrases = (
         "generated energy", "energy generated", "energy generation",
-        "banking", "banking unit", "banked", "banked unit", "banking contribution", "energy banked",
         "procurement price", "last price",
         "generated cost", "generation cost", "cost generated", "cost generation"
     )
     if any(p in norm for p in _proc_phrases):
         if not (date_str and time_obj):
             return err("MISSING_DATE_OR_TIME",
-                    "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
-                    intent="procurement")
+                       "Include BOTH a date (YYYY-MM-DD or '30 September 2027') and time (HH:MM).",
+                       intent="procurement")
         return handle_procurement_info(user_input, date_str, time_obj)
 
-
-    # Fallback
     if not intent:
         return err("UNRECOGNIZED", "Sorry, I couldn't understand your request.", intent=None)
-    
-    # NEW: if we had an intent but none of the branches handled it, say so explicitly
+
     return err("UNSUPPORTED_INTENT", "Sorry, I don't have data for that request.", intent=intent)

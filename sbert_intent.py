@@ -23,22 +23,19 @@ _INTENT_PHRASES = {
     "procurement": [
         "procurement price","last price","power purchase cost","ppc","purchase cost",
         "generated energy","energy generation","energy generated",
-        "banking unit","banked unit","units banked","energy banked","banking contribution",
         "generated cost","generation cost","cost generated","cost generation"
+    ],
+    "banking": [  # <-- NEW
+        "banking","banked units","banking units","banking unit","banked unit",
+        "energy banked","banking cost","adjusted units","adjustment charges"
     ],
     "plant_info": [
         "plf","plant load factor","paf","plant availability factor","availability factor",
         "variable cost","aux consumption","auxiliary consumption",
         "max power","min power","rated capacity","technical minimum","plant type"
     ],
-    "mod": [
-        "mod price","moment of dispatch price","dispatch price","dispatch rate","dispatch value",
-        "despatch price","despatch rate","despatch value"
-    ],
-    "iex": [
-        "iex price","indian energy exchange price","market clearing price","clearing price",
-        "exchange rate","exchange clearing rate","mcp"
-    ],
+    "mod": ["mod price","moment of dispatch price","dispatch price","dispatch rate","dispatch value","despatch price"],
+    "iex": ["iex price","indian energy exchange price","market clearing price","clearing price","exchange rate","mcp"],
     "demand": ["demand forecast","load prediction","electricity consumption","expected demand","predicted load"],
     "cost per block": ["cost per block","block price","block rate","rate per block","block cost"]
 }

@@ -7,6 +7,24 @@ from nlp_setup import normalize
 DEFAULT_TIMEOUT = (5, 15)  # (connect, read)
 RETRY_BACKOFFS = [0.5, 1.0, 2.0]
 
+# --- Tiny TTL cache (per-process) ---
+_CACHE = {}  # key -> (expires_at_epoch, value)
+
+def cache_get(key: str):
+    rec = _CACHE.get(key)
+    if not rec:
+        return None
+    exp, val = rec
+    import time
+    if exp and exp < time.time():
+        _CACHE.pop(key, None)
+        return None
+    return val
+
+def cache_set(key: str, value, ttl_sec: int = 300):
+    import time
+    _CACHE[key] = (time.time() + ttl_sec if ttl_sec else None, value)
+
 class FetchError(Exception):
     def __init__(self, message: str, *, status: Optional[int]=None, payload: Optional[Any]=None):
         super().__init__(message)
