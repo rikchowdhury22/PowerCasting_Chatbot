@@ -1,4 +1,7 @@
 # procurement_handler.py
+from dotenv import load_dotenv
+
+load_dotenv()
 import os
 import re
 from datetime import datetime
@@ -11,6 +14,7 @@ from utils import fuzzy_match, ok, err
 
 PROCUREMENT_WINDOW_MINUTES = int(os.getenv("PROCUREMENT_WINDOW_MINUTES", "15"))
 
+
 def _snap_time(time_obj, minutes: int):
     """Floor time to previous multiple of `minutes`."""
     if not time_obj or minutes <= 1:
@@ -18,6 +22,7 @@ def _snap_time(time_obj, minutes: int):
     total = time_obj.hour * 60 + time_obj.minute
     snapped = (total // minutes) * minutes
     return time_obj.replace(hour=snapped // 60, minute=snapped % 60, second=0, microsecond=0)
+
 
 def _extract_all_plants(data: dict):
     """
@@ -34,6 +39,7 @@ def _extract_all_plants(data: dict):
         return (mr or []) + (rp or [])
     rows = data.get("data")
     return rows if isinstance(rows, list) else []
+
 
 def handle_procurement_info(original_message, date_str, time_obj):
     try:
@@ -132,7 +138,7 @@ def handle_procurement_info(original_message, date_str, time_obj):
         # 7) If field is at top level (rare but supported)
         if isinstance(data, dict) and requested_field in data:
             val = data[requested_field]
-            text = f"{requested_field.replace('_',' ').capitalize()} at {start_timestamp}: {val}"
+            text = f"{requested_field.replace('_', ' ').capitalize()} at {start_timestamp}: {val}"
             return ok("procurement", {"text": text, "timestamp": start_timestamp,
                                       "field": requested_field, "value": val})
 
@@ -145,11 +151,11 @@ def handle_procurement_info(original_message, date_str, time_obj):
                 if fuzzy_match(normalize(pname), plant_query):
                     if requested_field not in plant:
                         return err("NO_DATA",
-                                   f"{requested_field.replace('_',' ').capitalize()} not available for {pname} at {start_timestamp}.",
+                                   f"{requested_field.replace('_', ' ').capitalize()} not available for {pname} at {start_timestamp}.",
                                    intent="procurement",
                                    details={"plant": pname, "field": requested_field, "timestamp": start_timestamp})
                     val = plant[requested_field]
-                    text = (f"{requested_field.replace('_',' ').capitalize()} for {pname} "
+                    text = (f"{requested_field.replace('_', ' ').capitalize()} for {pname} "
                             f"at {start_timestamp}: {val}")
                     return ok("procurement", {"text": text, "timestamp": start_timestamp,
                                               "plant": pname, "field": requested_field, "value": val})
@@ -161,7 +167,7 @@ def handle_procurement_info(original_message, date_str, time_obj):
             rows = [{"plant": (p.get("plant_name") or p.get("name") or "Unknown Plant"),
                      "value": p.get(requested_field, "N/A")} for p in all_plants]
             return ok("procurement", {
-                "text": f"{requested_field.replace('_',' ').capitalize()} values at {start_timestamp}",
+                "text": f"{requested_field.replace('_', ' ').capitalize()} values at {start_timestamp}",
                 "timestamp": start_timestamp,
                 "field": requested_field,
                 "rows": rows

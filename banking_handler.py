@@ -1,4 +1,7 @@
 # banking_handler.py
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
