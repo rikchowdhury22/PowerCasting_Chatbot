@@ -16,7 +16,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 // 👉 change URL/branch if your chatbot repo is different
-                git branch: 'main', url: 'https://github.com/DMMPrice/powercasting_chatbot.git'
+                git branch: 'main', url: 'https://github.com/rikchowdhury22/powercasting_chatbot.git'
             }
         }
 
