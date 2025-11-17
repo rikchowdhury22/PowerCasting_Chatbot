@@ -4,7 +4,7 @@ pipeline {
     environment {
         REGISTRY        = "dmmprice/powercasting_chatbot"
         CONTAINER_NAME  = "powercasting-chatbot"
-        HOST_PORT       = "4003"    // host port on VPS
+        HOST_PORT       = "4003"    // exposed port on VPS
         CONTAINER_PORT  = "5050"    // Flask/gunicorn port inside container
     }
 
@@ -15,25 +15,24 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // 👉 change URL/branch if your chatbot repo is different
-                git branch: 'main', url: 'https://github.com/rikchowdhury22/powercasting_chatbot.git'
+                // If your default branch is not 'main', change it to 'master' or whatever is correct
+                git branch: 'main', url: 'https://github.com/rikchowdhury22/PowerCasting_Chatbot.git'
             }
         }
 
         stage('Prepare .env (from Jenkins secret file)') {
             steps {
-                // Jenkins credential: secret file with your env vars
-                // ID example: powercasting-chatbot-env-file
+                // Create a Jenkins "Secret file" credential with ID: powercasting-chatbot-env-file
                 withCredentials([file(credentialsId: 'powercasting-chatbot-env-file', variable: 'ENV_FILE')]) {
                     sh '''
-                      echo "Copying env file from Jenkins credential to workspace..."
+                      echo "Copying env file from Jenkins credential to workspace as .env..."
                       cp "$ENV_FILE" .env
                     '''
                 }
             }
         }
 
-        stage('Build Docker image (local)') {
+        stage('Build Docker image') {
             steps {
                 script {
                     def imageTag = "${env.BUILD_NUMBER}"
@@ -48,7 +47,7 @@ pipeline {
             }
         }
 
-        stage('Push Docker image (push local image to Docker Hub)') {
+        stage('Push Docker image') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-dmmprice',
@@ -59,23 +58,21 @@ pipeline {
                       echo "Logging in to Docker Hub..."
                       echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
-                      echo "Pushing local image tags to Docker Hub..."
+                      echo "Pushing image tags to Docker Hub..."
                       docker push ${REGISTRY}:${BUILD_NUMBER}
                       docker push ${REGISTRY}:latest
 
-                      echo "Docker logout..."
+                      echo "Logging out from Docker Hub..."
                       docker logout
                     '''
                 }
             }
         }
 
-        stage('Deploy (destroy old container and start new from local image)') {
+        stage('Deploy (destroy old container & start new)') {
             steps {
                 withCredentials([file(credentialsId: 'powercasting-chatbot-env-file', variable: 'ENV_FILE')]) {
                     sh '''
-                      echo "Using locally built image for deployment (no docker pull)..."
-
                       echo "Stopping old container if exists..."
                       docker stop ${CONTAINER_NAME} || true
 
@@ -90,7 +87,7 @@ pipeline {
                         --env-file "$ENV_FILE" \
                         ${REGISTRY}:latest
 
-                      echo "Deployment complete: ${CONTAINER_NAME} on ${HOST_PORT} -> ${CONTAINER_PORT}"
+                      echo "Deployment complete: ${CONTAINER_NAME} running on ${HOST_PORT} -> ${CONTAINER_PORT}"
                     '''
                 }
             }
@@ -99,7 +96,7 @@ pipeline {
 
     post {
         always {
-            // clean dangling images, but keep the ones we just built because they are tagged
+            // Clean up dangling images (safe, doesn’t remove tagged ones we just built)
             sh 'docker image prune -f || true'
         }
     }
