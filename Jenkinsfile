@@ -16,7 +16,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 // If your default branch is not 'main', change it to 'master' or whatever is correct
-                git branch: 'main', url: 'https://github.com/rikchowdhury22/PowerCasting_Chatbot.git'
+                git branch: 'master', url: 'https://github.com/rikchowdhury22/PowerCasting_Chatbot.git'
             }
         }
 
