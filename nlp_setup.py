@@ -10,8 +10,8 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
 # Ensure HTTPS uses a CA bundle that existsc
-import ssl, certifi
-ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
+# import ssl, certifi
+# ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
 
 
 NLTK_LOCAL = os.path.abspath(os.path.join(os.path.dirname(__file__), "nltk_data"))
